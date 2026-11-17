@@ -58,6 +58,10 @@ WHEEL_TORQUE_LIMIT = 0.3    # N*m
 START_YAW = 0.4             # rad; the robot starts pointing up to this far off +x
 MAX_OFF_LINE = 1.5          # m; the episode ends if the robot wanders this far from y = 0
 EPISODE_S = 10.0
+# The floor is a wood tabletop and the robot is plastic (LEGO ABS): about 0.3 to 0.4 sliding friction, for every part
+# (wheels, chassis, skid). MuJoCo normally uses the larger of the two surfaces' friction (mjlab's floor says 1.0), so
+# the robot's parts are given contact priority to make this number the one used. Same value as beam_task.py.
+TABLE_FRICTION = 0.35
 # -------------------------------------------------------------------------------------------------------
 
 _ROBOT = SceneEntityCfg("robot")
@@ -69,8 +73,9 @@ def _get_spec() -> mujoco.MjSpec:
     spec.delete(actuator)
   chassis = spec.body("chassis")
   chassis.add_freejoint()                   # let the robot move around (same as drive.py)
-  for g in chassis.geoms:                   # only the wheels should grip; the chassis slides (same as drive.py)
-    g.friction[0] = 0.01
+  for g in spec.geoms:                      # every part of the robot: plastic on wood (same as drive.py)
+    g.friction[0] = TABLE_FRICTION
+    g.priority = 1                          # its friction wins over the floor's
   return spec
 
 

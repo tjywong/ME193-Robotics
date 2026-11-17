@@ -13,6 +13,7 @@ import mujoco
 MODEL = sys.argv[1] if len(sys.argv) > 1 else "onshape/scene.xml"   # your Onshape robot (or pass sample/scene.xml)
 LEFT, RIGHT = "left_wheel", "right_wheel"   # the wheel actuator names (printed below if they are wrong)
 OUT = "drive.mp4"
+TABLE_FRICTION = 0.35   # plastic robot on a wood tabletop, every part (the same as the mjlab tasks)
 
 # What the wheels do, in order: (until this second, left wheel speed, right wheel speed), in radians/second.
 PLAN = [
@@ -32,18 +33,22 @@ data = mujoco.MjData(model)
 
 print("joints:   ", [model.joint(i).name for i in range(model.njnt) if model.joint(i).name])
 print("actuators:", [model.actuator(i).name for i in range(model.nu)])
-left, right = model.actuator(LEFT).id, model.actuator(RIGHT).id   # stops with a clear error if a name is wrong
+if model.nu == 2 and LEFT not in [model.actuator(i).name for i in range(2)]:
+    left, right = 0, 1                 # a robot with two motors under other names (e.g. beams/): use them in order
+else:
+    left, right = model.actuator(LEFT).id, model.actuator(RIGHT).id   # stops with a clear error if a name is wrong
 
 # Put the robot just above the floor: find its lowest point and lift it from there.
 mujoco.mj_forward(model, data)
 lowest = (data.geom_xpos[:, 2] - model.geom_rbound).min()
 data.qpos[2] += 0.01 - lowest
 
-# Only the wheels should grip; the chassis and skid should slide.
-wheel_bodies = set(model.jnt_bodyid[model.jnt_type == mujoco.mjtJoint.mjJNT_HINGE])
+# Plastic on wood for every part of the robot. MuJoCo uses the larger of two touching surfaces' friction unless one
+# has priority, so the robot's parts get priority and their value is the one used, whatever the floor says.
 for g in range(model.ngeom):
-    if model.geom_bodyid[g] != 0 and model.geom_bodyid[g] not in wheel_bodies:
-        model.geom_friction[g, 0] = 0.01
+    if model.geom_bodyid[g] != 0:
+        model.geom_friction[g, 0] = TABLE_FRICTION
+        model.geom_priority[g] = 1
 
 
 def drive(actuator, speed):
